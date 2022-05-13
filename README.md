@@ -13,5 +13,5 @@ Project has following files structure:
 *Also we need to prepare target system:*  
 --allow multiple sessions  
 $ sudo vi /etc/ssh/sshd_config  
-- MaxSessions 128  
+MaxSessions 128  
 $ sudo systemctl restart sshd  
