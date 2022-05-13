@@ -11,4 +11,4 @@ Project has following files structure:
 ```
 
 *Also we need to prepare target system:*  
-# #allow multiple sessions  
+--allow multiple sessions  
