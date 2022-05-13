@@ -1,6 +1,6 @@
 # -DevOps-GitLab_CI_With_Docker-Compose
 
-This  is a manual how to build infrastructure for software development,
+This  is a manual how to build infrastructure for software development,  
 using GitLab for DevOps and Docker Compose as orchestrator.
 
 Project has following files structure:
