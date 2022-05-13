@@ -1,7 +1,6 @@
-# -DevOps-GitLab_CI_With_Docker-Compose
-
 This  is a manual how to build infrastructure for software development,  
-using GitLab for DevOps and Docker Compose as orchestrator.
+using GitLab for DevOps and Docker Compose as orchestrator.  
+gitlab-registry used as a image registry  
 
 Project has following files structure:
 ```bash
