@@ -1,4 +1,8 @@
 # -DevOps-GitLab_CI_With_Docker-Compose
+
+This  is a manual how to build infrastructure for software development,
+using GitLab for DevOps and Docker Compose as orchestrator.
+
 Project has following files structure:
 ```bash
 .
@@ -10,7 +14,7 @@ Project has following files structure:
 ├──.gitlab-ci.yml
 ```
 
-*Also we need to prepare target system:*  
+*prepare target system:*  
  --allow multiple sessions  
 *$ sudo vi /etc/ssh/sshd_config*  
 *MaxSessions 128*  
