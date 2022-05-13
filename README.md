@@ -21,7 +21,7 @@ $ sudo usermod -aG docker user
 $ sudo usermod -aG sudo user  
 $ sudo chmod 666 /var/run/docker.sock  
 
---generate keys
-*$ ssh-keygen*
-*$ ssh-copy-id user@1.1.5.43*
+--generate keys  
+*$ ssh-keygen*  
+*$ ssh-copy-id user@xxx.xxx.xxx.xxx*
 
