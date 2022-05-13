@@ -10,7 +10,7 @@ Project has following files structure:
 ├──.gitlab-ci.yml
 ```
 
-Also we need to prepare target system:
+Also we need to prepare target system:  
 // allow multiple sessions (while deployment here will be lots of non blocking operations)
 $ sudo vi /etc/ssh/sshd_config 
 - MaxSessions 128
