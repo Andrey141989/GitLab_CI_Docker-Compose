@@ -1,6 +1,6 @@
 This  is a manual how to build infrastructure for software development,  
 using GitLab for DevOps and Docker Compose as orchestrator.  
-gitlab-registry used as a image registry  
+Gitlab-registry used as a image registry  
 
 Project has following files structure:
 ```bash
