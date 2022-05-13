@@ -10,4 +10,4 @@ Project has following files structure:
 ├──.gitlab-ci.yml
 ```
 
-**Also we need to prepare target system:  **
+_Also we need to prepare target system:  _
