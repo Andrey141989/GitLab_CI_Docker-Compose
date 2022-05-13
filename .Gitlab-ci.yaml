@@ -42,9 +42,6 @@ deploy-to-test:
     - echo "$SERVER_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
-    - python3 get-env.py prod
-    - ssh -o StrictHostKeyChecking=no user@$SERVER_IP "sudo mkdir -p $CI_PROJECT_DIR"
-    - ssh user@$SERVER_IP "sudo chown -R user:user $CI_PROJECT_DIR"
     - echo "AIRFLOW_DATABASES_PASSWORD=$AIRFLOW_DATABASES_PASSWORD" >> sdh/.env
     - echo "_AIRFLOW_WWW_USER_PASSWORD=$_AIRFLOW_WWW_USER_PASSWORD" >> sdh/.env
     - echo "AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DATABASES_PASSWORD}:airflow@postgres:5432/airflow" >> sdh/.env-airflow
