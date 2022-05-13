@@ -1,0 +1,67 @@
+image: docker/compose:latest
+
+services:
+  - docker:dind
+
+before_script:
+  - apk add --update python3
+
+stages:
+  - build-test
+  - deploy-to-test
+  
+
+variables:
+  DEV_SERVER_IP: x.x.x.x
+  
+
+
+build-test:
+  stage: build-test
+  script:
+    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY_IMAGE
+    - echo "AIRFLOW_DATABASES_PASSWORD=$AIRFLOW_DATABASES_PASSWORD" >> sdh/.env
+    - echo "_AIRFLOW_WWW_USER_PASSWORD=$_AIRFLOW_WWW_USER_PASSWORD" >> sdh/.env
+    - echo "DELIVERY_MANAGER_DATABASES_PASSWORD=$DELIVERY_MANAGER_DATABASES_PASSWORD" >> sdh/.env
+    - echo "DELIVERY_TAG=$DELIVERY_TAG" >> sdh/.env
+    - echo "INIT_TAG=$INIT_TAG" >> sdh/.env
+    - echo "WEBSERVER_TAG=$WEBSERVER_TAG" >> sdh/.env
+    - echo "SCHEDULER_TAG=$SCHEDULER_TAG" >> sdh/.env
+    - echo "WORKER_TAG=$WORKER_TAG" >> sdh/.env
+    - echo "FLOWER_TAG=$FLOWER_TAG" >> sdh/.env
+    - docker-compose -f sdh/docker-compose.yaml --env-file sdh/.env build
+    - docker-compose -f sdh/docker-compose.yaml --env-file sdh/.env push
+  only:
+    - test
+
+deploy-to-test:
+  stage: deploy-to-test
+  script:
+    - apk update && apk add openssh-client --no-cache
+    - eval $(ssh-agent -s)
+    - echo "$SERVER_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - python3 get-env.py prod
+    - ssh -o StrictHostKeyChecking=no user@$SERVER_IP "sudo mkdir -p $CI_PROJECT_DIR"
+    - ssh user@$SERVER_IP "sudo chown -R user:user $CI_PROJECT_DIR"
+    - echo "AIRFLOW_DATABASES_PASSWORD=$AIRFLOW_DATABASES_PASSWORD" >> sdh/.env
+    - echo "_AIRFLOW_WWW_USER_PASSWORD=$_AIRFLOW_WWW_USER_PASSWORD" >> sdh/.env
+    - echo "AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DATABASES_PASSWORD}:airflow@postgres:5432/airflow" >> sdh/.env-airflow
+    - echo "AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://${AIRFLOW_DATABASES_PASSWORD}:airflow@postgres:5432/airflow" >> sdh/.env-airflow
+    - echo "DELIVERY_MANAGER_DATABASES_PASSWORD=$DELIVERY_MANAGER_DATABASES_PASSWORD" | tee -a sdh/.env-airflow sdh/.env-api >> sdh/.env
+    - echo "DELIVERY_MANAGER_SECRET_KEY=$DELIVERY_MANAGER_SECRET_KEY" | tee -a sdh/.env-airflow >> sdh/.env-api
+    - echo "DELIVERY_MANAGER_FIELD_KEY=$DELIVERY_MANAGER_FIELD_KEY" | tee -a sdh/.env-airflow >> sdh/.env-api
+    - echo "AIRFLOW_UID=$(ssh user@$SERVER_IP 'id -u')" >> sdh/.env
+    - echo "DELIVERY_TAG=$DELIVERY_TAG" >> sdh/.env
+    - echo "INIT_TAG=$INIT_TAG" >> sdh/.env
+    - echo "WEBSERVER_TAG=$WEBSERVER_TAG" >> sdh/.env
+    - echo "SCHEDULER_TAG=$SCHEDULER_TAG" >> sdh/.env
+    - echo "WORKER_TAG=$WORKER_TAG" >> sdh/.env
+    - echo "FLOWER_TAG=$FLOWER_TAG" >> sdh/.env
+    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY_IMAGE
+    - docker-compose -f sdh/docker-compose.yaml --env-file sdh/.env -H "ssh://user@$SERVER_IP" down --remove-orphans
+    - docker-compose -f sdh/docker-compose.yaml --env-file sdh/.env -H "ssh://user@$SERVER_IP" pull
+    - docker-compose -f sdh/docker-compose.yaml --env-file sdh/.env -H "ssh://user@$SERVER_IP" up -d
+  only:
+    - test
