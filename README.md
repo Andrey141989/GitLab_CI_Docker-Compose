@@ -15,3 +15,9 @@ Project has following files structure:
 $ sudo vi /etc/ssh/sshd_config  
 MaxSessions 128  
 $ sudo systemctl restart sshd  
+
+--add privileges
+$ sudo usermod -aG docker user
+$ sudo usermod -aG sudo user
+$ sudo chmod 666 /var/run/docker.sock
+
