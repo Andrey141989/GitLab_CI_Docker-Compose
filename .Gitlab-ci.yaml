@@ -1,64 +1,107 @@
 image: docker/compose:latest
-
 services:
   - docker:dind
 
-before_script:
-  - apk add --update python3
-
 stages:
-  - build-test
-  - deploy-to-test
-  
+  - verify
+  - build
+  - deploy
+
+.changelog_check:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - CHANGELOG.md
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        CHANGELOG_ERR: "CHANGELOG.md is not updated."
+
+.other_check:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event" && "1" == "1"  # Replace it with your condition
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      variables:
+        OTHER_ERR: "Your error text"
+
+verify:
+  stage: verify
+  rules:
+    - !reference [.changelog_check, rules]
+    - !reference [.other_check, rules]
+  script:
+    - if [ -n "$CHANGELOG_ERR" ]; then echo $CHANGELOG_ERR; fi
+    - if [ -n "$OTHER_ERR" ]; then echo $OTHER_ERR; fi
+    - if [ -n "$CHANGELOG_ERR" ] || [ -n "$OTHER_ERR" ]; then exit 1; fi
 
 variables:
-  DEV_SERVER_IP: x.x.x.x
-  
+  DEV_SERVER_IP: 1.1.5.218
+  TEST_SERVER_IP: 1.1.5.219
+  PROD_SERVER_IP: 1.1.5.220
 
-
-build-test:
-  stage: build-test
-  script:
-    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY_IMAGE
-    - echo "AIRFLOW_DATABASES_PASSWORD=$AIRFLOW_DATABASES_PASSWORD" >> sdh/.env
-    - echo "_AIRFLOW_WWW_USER_PASSWORD=$_AIRFLOW_WWW_USER_PASSWORD" >> sdh/.env
-    - echo "DELIVERY_MANAGER_DATABASES_PASSWORD=$DELIVERY_MANAGER_DATABASES_PASSWORD" >> sdh/.env
-    - echo "DELIVERY_TAG=$DELIVERY_TAG" >> sdh/.env
-    - echo "INIT_TAG=$INIT_TAG" >> sdh/.env
-    - echo "WEBSERVER_TAG=$WEBSERVER_TAG" >> sdh/.env
-    - echo "SCHEDULER_TAG=$SCHEDULER_TAG" >> sdh/.env
-    - echo "WORKER_TAG=$WORKER_TAG" >> sdh/.env
-    - echo "FLOWER_TAG=$FLOWER_TAG" >> sdh/.env
-    - docker-compose -f sdh/docker-compose.yaml --env-file sdh/.env build
-    - docker-compose -f sdh/docker-compose.yaml --env-file sdh/.env push
-  only:
-    - test
-
-deploy-to-test:
-  stage: deploy-to-test
+.init:
   script:
     - apk update && apk add openssh-client --no-cache
     - eval $(ssh-agent -s)
-    - echo "$SERVER_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+    - echo "$SSH_SERVER_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
+
+.check_branch:
+  rules:
+    - if: $SERVER_IP
+    - if: $CI_COMMIT_BRANCH == "dev"
+      variables:
+        SERVER_IP: $DEV_SERVER_IP
+    - if: $CI_COMMIT_BRANCH == "test"
+      variables:
+        ENV_MODE: prod
+        SERVER_IP: $TEST_SERVER_IP
+    - if: $CI_COMMIT_BRANCH == "master"
+      variables:
+        ENV_MODE: prod
+        SERVER_IP: $PROD_SERVER_IP
+
+build:
+  stage: build
+  rules:
+    - !reference [.check_branch, rules]
+  script:
+    - !reference [.init, script]
+    - apk add python3 --no-cache
+    - apk add -U git
+    - python3 get-env.py $ENV_MODE
     - echo "AIRFLOW_DATABASES_PASSWORD=$AIRFLOW_DATABASES_PASSWORD" >> sdh/.env
     - echo "_AIRFLOW_WWW_USER_PASSWORD=$_AIRFLOW_WWW_USER_PASSWORD" >> sdh/.env
+    - echo "AIRFLOW__SMTP__SMTP_HOST=$AIRFLOW__SMTP__SMTP_HOST" >> sdh/.env-airflow
+    - echo "AIRFLOW__SMTP__SMTP_MAIL_FROM=$AIRFLOW__SMTP__SMTP_MAIL_FROM" >> sdh/.env-airflow
+    - echo "AIRFLOW__SMTP__SMTP_PASSWORD=$AIRFLOW__SMTP__SMTP_PASSWORD" >> sdh/.env-airflow
+    - echo "AIRFLOW__SMTP__SMTP_PORT=$AIRFLOW__SMTP__SMTP_PORT" >> sdh/.env-airflow
+    - echo "AIRFLOW__SMTP__SMTP_SSL=$AIRFLOW__SMTP__SMTP_SSL" >> sdh/.env-airflow
+    - echo "AIRFLOW__SMTP__SMTP_STARTTLS=$AIRFLOW__SMTP__SMTP_STARTTLS" >> sdh/.env-airflow
+    - echo "AIRFLOW__SMTP__SMTP_USER=$AIRFLOW__SMTP__SMTP_USER" >> sdh/.env-airflow
     - echo "AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DATABASES_PASSWORD}:airflow@postgres:5432/airflow" >> sdh/.env-airflow
     - echo "AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://${AIRFLOW_DATABASES_PASSWORD}:airflow@postgres:5432/airflow" >> sdh/.env-airflow
+    - echo "AIRFLOW__WEBSERVER__BASE_URL=http://${SERVER_IP}:8080/" >> sdh/.env-airflow
     - echo "DELIVERY_MANAGER_DATABASES_PASSWORD=$DELIVERY_MANAGER_DATABASES_PASSWORD" | tee -a sdh/.env-airflow sdh/.env-api >> sdh/.env
     - echo "DELIVERY_MANAGER_SECRET_KEY=$DELIVERY_MANAGER_SECRET_KEY" | tee -a sdh/.env-airflow >> sdh/.env-api
     - echo "DELIVERY_MANAGER_FIELD_KEY=$DELIVERY_MANAGER_FIELD_KEY" | tee -a sdh/.env-airflow >> sdh/.env-api
-    - echo "AIRFLOW_UID=$(ssh user@$SERVER_IP 'id -u')" >> sdh/.env
-    - echo "DELIVERY_TAG=$DELIVERY_TAG" >> sdh/.env
-    - echo "INIT_TAG=$INIT_TAG" >> sdh/.env
-    - echo "WEBSERVER_TAG=$WEBSERVER_TAG" >> sdh/.env
-    - echo "SCHEDULER_TAG=$SCHEDULER_TAG" >> sdh/.env
-    - echo "WORKER_TAG=$WORKER_TAG" >> sdh/.env
-    - echo "FLOWER_TAG=$FLOWER_TAG" >> sdh/.env
-    - docker login -u gitlab-ci-token -p $CI_BUILD_TOKEN $CI_REGISTRY_IMAGE
-    - docker-compose -f sdh/docker-compose.yaml --env-file sdh/.env -H "ssh://user@$SERVER_IP" down --remove-orphans
-    - docker-compose -f sdh/docker-compose.yaml --env-file sdh/.env -H "ssh://user@$SERVER_IP" pull
-    - docker-compose -f sdh/docker-compose.yaml --env-file sdh/.env -H "ssh://user@$SERVER_IP" up -d
-  only:
-    - test
+    - USER_UID=$(ssh -o StrictHostKeyChecking=no user@$SERVER_IP 'id -u')
+    - echo "USER_UID=$USER_UID" >> sdh/.env
+    - echo "USER_GID=$(ssh user@$SERVER_IP 'id -g')" >> sdh/.env
+    - echo "AIRFLOW_UID=$USER_UID" >> sdh/.env
+    - docker-compose -f sdh/docker-compose.yaml --env-file sdh/.env -H "ssh://user@$SERVER_IP" build
+  artifacts:
+    paths:
+      - sdh/*
+
+deploy:
+  stage: deploy
+  rules:
+    - !reference [.check_branch, rules]
+  script:
+    - !reference [.init, script]
+    - cp -rf sdh /opt/
+    - cd /opt/sdh/
+    - docker-compose -f docker-compose.yaml --env-file .env -H "ssh://user@$SERVER_IP" down --remove-orphans
+    - scp -o StrictHostKeyChecking=no -r core user@$SERVER_IP:/opt/sdh
+    - docker-compose -f docker-compose.yaml --env-file .env -H "ssh://user@$SERVER_IP" up -d
